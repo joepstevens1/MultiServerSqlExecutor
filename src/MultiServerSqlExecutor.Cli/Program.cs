@@ -111,7 +111,7 @@ internal class Program
         }
         foreach (var s in list)
         {
-            Console.WriteLine($"- {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}");
+            Console.WriteLine($"- {s.Authentication} {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}");
         }
         return 0;
     }

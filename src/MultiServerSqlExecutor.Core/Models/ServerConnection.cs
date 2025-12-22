@@ -1,4 +1,14 @@
-﻿namespace MultiServerSqlExecutor.Core.Models;
+﻿using Microsoft.Data.SqlClient;
+
+namespace MultiServerSqlExecutor.Core.Models;
+
+public enum AuthType
+{
+    SqlPassword,
+    AzureInteractive,
+    AzurePassword,
+    AzureMfa
+}
 
 public class ServerConnection
 {
@@ -7,10 +17,47 @@ public class ServerConnection
     public string Database { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty; // Consider using secure storage in production
+    public AuthType Authentication { get; set; } = AuthType.SqlPassword;
 
     public string BuildConnectionString()
     {
-        // Encrypt=False to avoid certificate issues by default; TrustServerCertificate=True for convenience.
-        return $"Server=tcp:{Server},1433;Initial Catalog={Database};Persist Security Info=False;User ID={Username};Password={Password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;";
+        var dataSource = Server;
+        if (Authentication != AuthType.SqlPassword && !string.IsNullOrWhiteSpace(dataSource) && !dataSource.Contains('.'))
+        {
+            dataSource += ".database.windows.net";
+        }
+
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = dataSource,
+            InitialCatalog = Database,
+            PersistSecurityInfo = false,
+            MultipleActiveResultSets = false,
+            Encrypt = true,
+            TrustServerCertificate = true
+        };
+
+        switch (Authentication)
+        {
+            case AuthType.SqlPassword:
+                builder.UserID = Username;
+                builder.Password = Password;
+                break;
+            case AuthType.AzureInteractive:
+                builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryInteractive;
+                builder.UserID = Username; // Optional for interactive but often useful as a hint
+                break;
+            case AuthType.AzurePassword:
+                builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryPassword;
+                builder.UserID = Username;
+                builder.Password = Password;
+                break;
+            case AuthType.AzureMfa:
+                builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryInteractive;
+                builder.UserID = Username;
+                break;
+        }
+
+        return builder.ConnectionString;
     }
 }

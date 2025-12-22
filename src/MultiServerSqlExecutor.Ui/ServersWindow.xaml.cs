@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using MultiServerSqlExecutor.Core.Models;
 using MultiServerSqlExecutor.Core.Services;
 
@@ -24,20 +26,43 @@ public partial class ServersWindow : Window
     {
         try
         {
+            var authType = AuthType.SqlPassword;
+            if (CboAuthType.SelectedItem is ComboBoxItem item && Enum.TryParse<AuthType>(item.Tag.ToString(), out var parsedAuth))
+            {
+                authType = parsedAuth;
+            }
+
             var server = new ServerConnection
             {
                 Name = TxtName.Text.Trim(),
                 Server = TxtServer.Text.Trim(),
                 Database = TxtDatabase.Text.Trim(),
                 Username = TxtUser.Text.Trim(),
-                Password = TxtPass.Password
+                Password = TxtPass.Password,
+                Authentication = authType
             };
+
             if (string.IsNullOrWhiteSpace(server.Name) || string.IsNullOrWhiteSpace(server.Server) ||
-                string.IsNullOrWhiteSpace(server.Database) || string.IsNullOrWhiteSpace(server.Username))
+                string.IsNullOrWhiteSpace(server.Database))
             {
-                MessageBox.Show("Please fill in all fields.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please fill in Name, Server, and Database.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
+            // Validation based on auth type
+            if (authType == AuthType.SqlPassword || authType == AuthType.AzurePassword)
+            {
+                if (string.IsNullOrWhiteSpace(server.Username) || string.IsNullOrWhiteSpace(server.Password))
+                {
+                    MessageBox.Show("Username and Password are required for this authentication type.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+            }
+            else if (authType == AuthType.AzureMfa || authType == AuthType.AzureInteractive)
+            {
+                // Username is optional but recommended as a hint.
+            }
+
             _store.AddOrUpdate(server);
             ClearFields();
             LoadServers();
@@ -61,10 +86,11 @@ public partial class ServersWindow : Window
         TxtDatabase.Clear();
         TxtUser.Clear();
         TxtPass.Clear();
+        CboAuthType.SelectedIndex = 0;
         TxtName.IsEnabled = true;
     }
 
-    private void OnSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ServersList.SelectedItem is ServerConnection sc)
         {
@@ -73,20 +99,53 @@ public partial class ServersWindow : Window
             TxtDatabase.Text = sc.Database;
             TxtUser.Text = sc.Username;
             TxtPass.Password = sc.Password;
-            // Name is the key in our simple AddOrUpdate, so let's keep it disabled if editing
-            // Or we could allow changing it but then it would be a "Save As" if not careful.
-            // Requirement says "select an existing server it populates the edit fields and you can modify the values and save that changes"
-            // If they change the name, it might create a new entry.
-            // TxtName.IsEnabled = false; 
+
+            foreach (ComboBoxItem item in CboAuthType.Items)
+            {
+                if (item.Tag.ToString() == sc.Authentication.ToString())
+                {
+                    CboAuthType.SelectedItem = item;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void OnAuthTypeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CboAuthType == null || LblUser == null || TxtUser == null || LblPass == null || TxtPass == null) return;
+        if (CboAuthType.SelectedItem is ComboBoxItem item && Enum.TryParse<AuthType>(item.Tag.ToString(), out var authType))
+        {
+            switch (authType)
+            {
+                case AuthType.SqlPassword:
+                case AuthType.AzurePassword:
+                    LblUser.Visibility = Visibility.Visible;
+                    TxtUser.Visibility = Visibility.Visible;
+                    LblPass.Visibility = Visibility.Visible;
+                    TxtPass.Visibility = Visibility.Visible;
+                    break;
+                case AuthType.AzureMfa:
+                case AuthType.AzureInteractive:
+                    LblUser.Visibility = Visibility.Visible;
+                    TxtUser.Visibility = Visibility.Visible;
+                    LblPass.Visibility = Visibility.Collapsed;
+                    TxtPass.Visibility = Visibility.Collapsed;
+                    break;
+            }
         }
     }
 
     private void OnRemoveServer(object sender, RoutedEventArgs e)
     {
-        if (ServersList.SelectedItem is ServerConnection sc)
+        if (sender is Button { Tag: ServerConnection sc })
         {
-            _store.Remove(sc.Name);
-            LoadServers();
+            if (MessageBox.Show($"Are you sure you want to remove the server '{sc.Name}'?", "Confirm Removal",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                _store.Remove(sc.Name);
+                LoadServers();
+            }
         }
     }
 
