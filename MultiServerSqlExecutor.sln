@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiServerSqlExecutor.Core", "src\MultiServerSqlExecutor.Core\MultiServerSqlExecutor.Core.csproj", "{2F8F12E7-2E73-4F7A-A3C4-9C2E8B5A0E11}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiServerSqlExecutor.Cli", "src\MultiServerSqlExecutor.Cli\MultiServerSqlExecutor.Cli.csproj", "{A2B9F5E0-9E3B-4D0D-9C88-6E0B5C5F4E22}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiServerSqlExecutor.Ui", "src\MultiServerSqlExecutor.Ui\MultiServerSqlExecutor.Ui.csproj", "{5B1C0B8E-1C49-4E2E-9D52-0A3A4A9D3F44}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {2F8F12E7-2E73-4F7A-A3C4-9C2E8B5A0E11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {2F8F12E7-2E73-4F7A-A3C4-9C2E8B5A0E11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {2F8F12E7-2E73-4F7A-A3C4-9C2E8B5A0E11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {2F8F12E7-2E73-4F7A-A3C4-9C2E8B5A0E11}.Release|Any CPU.Build.0 = Release|Any CPU
+        {A2B9F5E0-9E3B-4D0D-9C88-6E0B5C5F4E22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {A2B9F5E0-9E3B-4D0D-9C88-6E0B5C5F4E22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {A2B9F5E0-9E3B-4D0D-9C88-6E0B5C5F4E22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {A2B9F5E0-9E3B-4D0D-9C88-6E0B5C5F4E22}.Release|Any CPU.Build.0 = Release|Any CPU
+        {5B1C0B8E-1C49-4E2E-9D52-0A3A4A9D3F44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {5B1C0B8E-1C49-4E2E-9D52-0A3A4A9D3F44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {5B1C0B8E-1C49-4E2E-9D52-0A3A4A9D3F44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {5B1C0B8E-1C49-4E2E-9D52-0A3A4A9D3F44}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal
