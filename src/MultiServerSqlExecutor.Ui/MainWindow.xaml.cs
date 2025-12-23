@@ -2,7 +2,12 @@
 using System.Data;
 using System.Windows;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Windows.Input;
+using System.Xml;
+using ICSharpCode.AvalonEdit.Highlighting;
+using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using MultiServerSqlExecutor.Core.Services;
 
 namespace MultiServerSqlExecutor.Ui;
@@ -24,7 +29,34 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Loaded += MainWindow_Loaded;
         QueryEditor.Text = "SELECT TOP 10 * FROM INFORMATION_SCHEMA.TABLES;";
+    }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        LoadSqlHighlighting();
+    }
+
+    private void LoadSqlHighlighting()
+    {
+        try
+        {
+            var executingAssembly = Assembly.GetExecutingAssembly();
+            using var stream = executingAssembly
+                .GetManifestResourceStream("MultiServerSqlExecutor.Ui.SQL.xshd");
+            if (stream == null)
+            {
+                return;
+            }
+
+            using XmlReader reader = new XmlTextReader(stream);
+            QueryEditor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading highlighting: {ex.Message}");
+        }
     }
 
     private void OnOpenServers(object sender, RoutedEventArgs e)

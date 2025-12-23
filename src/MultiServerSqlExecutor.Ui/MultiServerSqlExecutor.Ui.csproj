@@ -6,6 +6,14 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="SQL.xshd" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="SQL.xshd">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.0" />
   </ItemGroup>
   <ItemGroup>

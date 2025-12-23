@@ -35,7 +35,7 @@
 
             <!-- Query editor -->
             <GroupBox Header="SQL Query" Grid.Row="0">
-                <avalonedit:TextEditor x:Name="QueryEditor" ShowLineNumbers="True" SyntaxHighlighting="SQL" FontFamily="Consolas" FontSize="14"/>
+                <avalonedit:TextEditor x:Name="QueryEditor" ShowLineNumbers="True" FontFamily="Consolas" FontSize="14" SyntaxHighlighting="SQL"/>
             </GroupBox>
 
             <!-- Splitter with horizontal handle -->
