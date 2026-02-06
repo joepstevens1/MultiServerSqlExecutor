@@ -25,10 +25,20 @@ public class CsvExporter
         // collect all column names
         var allCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var dt in results.Values)
+        {
             foreach (DataColumn col in dt.Columns)
+            {
                 allCols.Add(col.ColumnName);
+            }
+        }
+
         foreach (var col in allCols)
-            combined.Columns.Add(col);
+        {
+            if (col != "Server")
+            {
+                combined.Columns.Add(col);
+            }
+        }
 
         foreach (var (server, dt) in results)
         {

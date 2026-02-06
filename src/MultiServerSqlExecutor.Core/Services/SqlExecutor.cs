@@ -6,8 +6,13 @@ namespace MultiServerSqlExecutor.Core.Services;
 
 public class SqlExecutor
 {
-    public async Task<Dictionary<string, DataTable>> ExecuteOnAllAsync(IEnumerable<ServerConnection> servers, string sql, CancellationToken ct = default)
+    public async Task<Dictionary<string, DataTable>> ExecuteOnAllAsync(IReadOnlyList<ServerConnection> servers, string sql, CancellationToken ct = default)
     {
+        foreach (var server in servers)
+        {
+            var loginSql = "Select 1";
+            var dt = await ExecuteAsync(server, loginSql, ct);
+        }
         var tasks = servers.Select(async s =>
         {
             var dt = await ExecuteAsync(s, sql, ct);
