@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -41,6 +42,13 @@ public partial class ServersWindow : Window
                 Password = TxtPass.Password,
                 Authentication = authType
             };
+
+            var existing = _store.Load().FirstOrDefault(s =>
+                string.Equals(s.Name, server.Name, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                server.Groups = existing.Groups?.ToList() ?? new List<string>();
+            }
 
             if (string.IsNullOrWhiteSpace(server.Name) || string.IsNullOrWhiteSpace(server.Server) ||
                 string.IsNullOrWhiteSpace(server.Database))

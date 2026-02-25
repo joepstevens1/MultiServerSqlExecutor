@@ -111,7 +111,8 @@ internal class Program
         }
         foreach (var s in list)
         {
-            Console.WriteLine($"- {s.Authentication} {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}");
+            var groups = s.Groups?.Count > 0 ? string.Join(",", s.Groups) : "(none)";
+            Console.WriteLine($"- {s.Authentication} {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}; Groups={groups}");
         }
         return 0;
     }

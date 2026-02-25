@@ -18,6 +18,7 @@ public class ServerConnection
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty; // Consider using secure storage in production
     public AuthType Authentication { get; set; } = AuthType.SqlPassword;
+    public List<string> Groups { get; set; } = new();
 
     public string BuildConnectionString()
     {
