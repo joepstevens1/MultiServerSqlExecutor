@@ -1,5 +1,6 @@
 using System.Data;
 using System.Threading;
+using System.Collections.Concurrent;
 using Microsoft.Data.SqlClient;
 using MultiServerSqlExecutor.Core.Models;
 
@@ -7,6 +8,9 @@ namespace MultiServerSqlExecutor.Core.Services;
 
 public class SqlExecutor
 {
+    private readonly ConcurrentDictionary<string, byte> _authenticatedServerKeys =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<Dictionary<string, DataTable>> ExecuteOnAllAsync(
         IReadOnlyList<ServerConnection> servers,
         string sql,
@@ -58,7 +62,13 @@ public class SqlExecutor
         {
             try
             {
-                _ = await ExecuteAsync(server, "Select 1", ct);
+                var serverKey = BuildServerKey(server);
+                if (!_authenticatedServerKeys.ContainsKey(serverKey))
+                {
+                    _ = await ExecuteAsync(server, "Select 1", ct);
+                    _authenticatedServerKeys.TryAdd(serverKey, 0);
+                }
+
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
                 {
                     Server = server,
@@ -89,6 +99,7 @@ public class SqlExecutor
 
         var tasks = connectedServers.Select(async server =>
         {
+            var serverKey = BuildServerKey(server);
             try
             {
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
@@ -112,6 +123,8 @@ public class SqlExecutor
             }
             catch (Exception ex)
             {
+                _authenticatedServerKeys.TryRemove(serverKey, out _);
+
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
                 {
                     Server = server,
@@ -136,6 +149,16 @@ public class SqlExecutor
         var queryResults = await Task.WhenAll(tasks);
         results.AddRange(queryResults);
         return results;
+    }
+
+    private static string BuildServerKey(ServerConnection server)
+    {
+        return string.Join(
+            "|",
+            server.Authentication.ToString(),
+            server.Server ?? string.Empty,
+            server.Database ?? string.Empty,
+            server.Username ?? string.Empty);
     }
 
     public async Task<DataTable> ExecuteAsync(ServerConnection server, string sql, CancellationToken ct = default)

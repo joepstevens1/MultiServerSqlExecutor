@@ -1,0 +1,70 @@
+trigger:
+- main
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  BuildConfiguration: Release
+  RuntimeId: win-x64
+
+steps:
+- task: UseDotNet@2
+  inputs:
+    packageType: sdk
+    version: 8.0.x
+
+- script: dotnet restore MultiServerSqlExecutor.sln
+  displayName: Restore
+
+- script: dotnet build MultiServerSqlExecutor.sln -c $(BuildConfiguration) --no-restore
+  displayName: Build
+
+- script: >
+    dotnet publish src/MultiServerSqlExecutor.Cli/MultiServerSqlExecutor.Cli.csproj
+    -c $(BuildConfiguration)
+    -r $(RuntimeId)
+    --self-contained true
+    /p:PublishSingleFile=true
+    /p:PublishTrimmed=false
+    /p:DebugType=None
+    /p:DebugSymbols=false
+    -o $(Build.ArtifactStagingDirectory)/cli
+  displayName: Publish CLI Single File
+
+- script: >
+    dotnet publish src/MultiServerSqlExecutor.Ui/MultiServerSqlExecutor.Ui.csproj
+    -c $(BuildConfiguration)
+    -r $(RuntimeId)
+    --self-contained true
+    /p:PublishSingleFile=true
+    /p:PublishTrimmed=false
+    /p:DebugType=None
+    /p:DebugSymbols=false
+    -o $(Build.ArtifactStagingDirectory)/ui
+  displayName: Publish UI Single File
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.ArtifactStagingDirectory)/cli
+    includeRootFolder: false
+    archiveType: zip
+    archiveFile: $(Build.ArtifactStagingDirectory)/MultiServerSqlExecutor-CLI-$(Build.BuildNumber)-$(RuntimeId).zip
+    replaceExistingArchive: true
+  displayName: Zip CLI
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(Build.ArtifactStagingDirectory)/ui
+    includeRootFolder: false
+    archiveType: zip
+    archiveFile: $(Build.ArtifactStagingDirectory)/MultiServerSqlExecutor-UI-$(Build.BuildNumber)-$(RuntimeId).zip
+    replaceExistingArchive: true
+  displayName: Zip UI
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: $(Build.ArtifactStagingDirectory)
+    ArtifactName: drop
+    publishLocation: Container
+  displayName: Publish Artifacts

@@ -216,13 +216,31 @@ public partial class MainWindow : Window
     private static DataTable Combine(IDictionary<string, DataTable> results)
     {
         var combined = new DataTable();
-        combined.Columns.Add("Server");
-        var allCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        combined.Columns.Add("Server", typeof(string));
+
+        var combinedColumnTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         foreach (var dt in results.Values)
+        {
             foreach (DataColumn col in dt.Columns)
-                allCols.Add(col.ColumnName);
-        foreach (var col in allCols)
-            combined.Columns.Add(col);
+            {
+                if (combinedColumnTypes.TryGetValue(col.ColumnName, out var existingType))
+                {
+                    if (existingType != col.DataType)
+                    {
+                        combinedColumnTypes[col.ColumnName] = typeof(object);
+                    }
+                }
+                else
+                {
+                    combinedColumnTypes[col.ColumnName] = col.DataType;
+                }
+            }
+        }
+
+        foreach (var (columnName, columnType) in combinedColumnTypes)
+        {
+            combined.Columns.Add(columnName, columnType);
+        }
 
         foreach (var (server, dt) in results)
         {
@@ -490,7 +508,7 @@ internal sealed class DatabaseExecutionItem : INotifyPropertyChanged
     {
         ServerName = server.Name;
         DatabaseName = string.IsNullOrWhiteSpace(server.Database) ? "(No Database Name)" : server.Database;
-        DisplayName = $"{DatabaseName} ({ServerName})";
+        DisplayName = ServerName;
         _status = QueryExecutionStatus.NotStarted;
     }
 
