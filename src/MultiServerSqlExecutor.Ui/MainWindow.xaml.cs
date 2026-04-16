@@ -23,6 +23,31 @@ namespace MultiServerSqlExecutor.Ui;
 public partial class MainWindow : Window
 {
     private const string UnassignedGroupOption = "(Unassigned)";
+    private const string DefaultQueryHeader = "SQL Query";
+    private const string SqlFileDialogFilter = "SQL files (*.sql)|*.sql|All files (*.*)|*.*";
+    private const string DefaultQueryFileName = "query.sql";
+    private const string DefaultQueryText = "SELECT\n\tGetUtcDate() as QueryTime,\n\t@@SERVERNAME as ServerName,\t\n\tDB_NAME() AS DatabaseName;";
+
+    public static readonly RoutedUICommand OpenSqlFileCommand = new RoutedUICommand(
+        "Open SQL File",
+        "OpenSqlFile",
+        typeof(MainWindow),
+        new InputGestureCollection { new KeyGesture(Key.O, ModifierKeys.Control) }
+    );
+
+    public static readonly RoutedUICommand SaveSqlFileCommand = new RoutedUICommand(
+        "Save SQL File",
+        "SaveSqlFile",
+        typeof(MainWindow),
+        new InputGestureCollection { new KeyGesture(Key.S, ModifierKeys.Control) }
+    );
+
+    public static readonly RoutedUICommand SaveSqlFileAsCommand = new RoutedUICommand(
+        "Save SQL File As",
+        "SaveSqlFileAs",
+        typeof(MainWindow),
+        new InputGestureCollection { new KeyGesture(Key.S, ModifierKeys.Control | ModifierKeys.Shift) }
+    );
 
     public static readonly RoutedUICommand RunCommand = new RoutedUICommand(
         "Run Query",
@@ -40,15 +65,20 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, DatabaseExecutionItem> _databaseStatusByServerName = new(StringComparer.OrdinalIgnoreCase);
     private GridLength _sidebarExpandedWidth = new(280, GridUnitType.Pixel);
     private DataTable? _lastCombined;
+    private string? _currentQueryFilePath;
+    private bool _isQueryDirty;
     private DateTime _runStartUtc;
 
     public MainWindow()
     {
         InitializeComponent();
         Loaded += MainWindow_Loaded;
+        Closing += MainWindow_Closing;
         _runTimer.Tick += OnRunTimerTick;
         DatabaseStatusList.ItemsSource = _databaseStatuses;
-        QueryEditor.Text = "SELECT\n\tGetUtcDate() as QueryTime,\n\t@@SERVERNAME as ServerName,\t\n\tDB_NAME() AS DatabaseName;";
+        QueryEditor.Text = DefaultQueryText;
+        QueryEditor.TextChanged += OnQueryEditorTextChanged;
+        UpdateQueryHeader();
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -121,6 +151,21 @@ public partial class MainWindow : Window
     private void OnRunClick(object sender, RoutedEventArgs e)
     {
         RunQuery();
+    }
+
+    private void OnOpenSqlFile(object sender, ExecutedRoutedEventArgs e)
+    {
+        OpenSqlFile();
+    }
+
+    private void OnSaveSqlFile(object sender, ExecutedRoutedEventArgs e)
+    {
+        SaveSqlFile();
+    }
+
+    private void OnSaveSqlFileAs(object sender, ExecutedRoutedEventArgs e)
+    {
+        SaveSqlFileAs();
     }
 
     private async void RunQuery()
@@ -211,6 +256,14 @@ public partial class MainWindow : Window
     private void OnExit(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (!PromptToSaveChangesIfNeeded())
+        {
+            e.Cancel = true;
+        }
     }
 
     private static DataTable Combine(IDictionary<string, DataTable> results)
@@ -358,7 +411,7 @@ public partial class MainWindow : Window
                 .Where(s =>
                 {
                     var hasNoGroups = s.Groups == null || s.Groups.Count == 0;
-                    var inSelectedGroup = !hasNoGroups && s.Groups.Any(g => selectedGroupSet.Contains(g));
+                    var inSelectedGroup = s.Groups?.Any(g => selectedGroupSet.Contains(g)) == true;
                     return inSelectedGroup || (includeUnassigned && hasNoGroups);
                 })
                 .ToList();
@@ -466,6 +519,160 @@ public partial class MainWindow : Window
         var elapsed = DateTime.UtcNow - _runStartUtc;
         if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
         TxtElapsed.Text = elapsed.ToString(@"hh\:mm\:ss");
+    }
+
+    private void OnQueryEditorTextChanged(object? sender, EventArgs e)
+    {
+        _isQueryDirty = true;
+    }
+
+    private void OpenSqlFile()
+    {
+        if (!PromptToSaveChangesIfNeeded())
+        {
+            return;
+        }
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = SqlFileDialogFilter,
+            InitialDirectory = GetInitialSqlFolder()
+        };
+
+        if (dlg.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            QueryEditor.Text = File.ReadAllText(dlg.FileName);
+            _currentQueryFilePath = dlg.FileName;
+            _isQueryDirty = false;
+            UpdateQueryHeader();
+            RememberSqlFolderFromPath(dlg.FileName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Open Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private bool SaveSqlFile()
+    {
+        if (string.IsNullOrWhiteSpace(_currentQueryFilePath))
+        {
+            return SaveSqlFileAs();
+        }
+
+        return SaveSqlFileToPath(_currentQueryFilePath);
+    }
+
+    private bool SaveSqlFileAs()
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = SqlFileDialogFilter,
+            DefaultExt = ".sql",
+            AddExtension = true,
+            InitialDirectory = GetInitialSqlFolder(),
+            FileName = GetSaveFileName()
+        };
+
+        if (dlg.ShowDialog() != true)
+        {
+            return false;
+        }
+
+        return SaveSqlFileToPath(dlg.FileName);
+    }
+
+    private bool SaveSqlFileToPath(string filePath)
+    {
+        try
+        {
+            File.WriteAllText(filePath, QueryEditor.Text);
+            _currentQueryFilePath = filePath;
+            _isQueryDirty = false;
+            UpdateQueryHeader();
+            RememberSqlFolderFromPath(filePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    private bool PromptToSaveChangesIfNeeded()
+    {
+        if (!_isQueryDirty)
+        {
+            return true;
+        }
+
+        var result = MessageBox.Show(
+            "Do you want to save changes to the current SQL file?",
+            "Unsaved Changes",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        return result switch
+        {
+            MessageBoxResult.Yes => SaveSqlFile(),
+            MessageBoxResult.No => true,
+            _ => false
+        };
+    }
+
+    private void UpdateQueryHeader()
+    {
+        var header = DefaultQueryHeader;
+        if (!string.IsNullOrWhiteSpace(_currentQueryFilePath))
+        {
+            header = $"{header} - {Path.GetFileName(_currentQueryFilePath)}";
+        }
+
+        QueryGroupBox.Header = header;
+    }
+
+    private string GetInitialSqlFolder()
+    {
+        var currentFileFolder = string.IsNullOrWhiteSpace(_currentQueryFilePath)
+            ? null
+            : Path.GetDirectoryName(_currentQueryFilePath);
+        if (!string.IsNullOrWhiteSpace(currentFileFolder) && Directory.Exists(currentFileFolder))
+        {
+            return currentFileFolder;
+        }
+
+        var savedFolder = _store.LoadLastSqlFileFolder();
+        if (!string.IsNullOrWhiteSpace(savedFolder) && Directory.Exists(savedFolder))
+        {
+            return savedFolder;
+        }
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
+    private string GetSaveFileName()
+    {
+        if (!string.IsNullOrWhiteSpace(_currentQueryFilePath))
+        {
+            return Path.GetFileName(_currentQueryFilePath);
+        }
+
+        return DefaultQueryFileName;
+    }
+
+    private void RememberSqlFolderFromPath(string filePath)
+    {
+        var folder = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            _store.SaveLastSqlFileFolder(folder);
+        }
     }
 
     private void OnDatabaseSidebarCollapsed(object sender, RoutedEventArgs e)

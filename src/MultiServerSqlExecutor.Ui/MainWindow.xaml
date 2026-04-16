@@ -51,16 +51,23 @@
         </Style>
     </Window.Resources>
     <Window.CommandBindings>
+        <CommandBinding Command="{x:Static local:MainWindow.OpenSqlFileCommand}" Executed="OnOpenSqlFile" />
+        <CommandBinding Command="{x:Static local:MainWindow.SaveSqlFileCommand}" Executed="OnSaveSqlFile" />
+        <CommandBinding Command="{x:Static local:MainWindow.SaveSqlFileAsCommand}" Executed="OnSaveSqlFileAs" />
         <CommandBinding Command="{x:Static local:MainWindow.RunCommand}" Executed="OnRun" />
     </Window.CommandBindings>
     <DockPanel>
         <!-- Menu bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
+                <MenuItem Header="_Open..." Command="{x:Static local:MainWindow.OpenSqlFileCommand}" />
+                <MenuItem Header="_Save" Command="{x:Static local:MainWindow.SaveSqlFileCommand}" />
+                <MenuItem Header="Save _As..." Command="{x:Static local:MainWindow.SaveSqlFileAsCommand}" />
+                <Separator />
                 <MenuItem Header="_Servers..." Click="OnOpenServers" />
                 <MenuItem Header="_Groups..." Click="OnOpenGroups" />
                 <Separator />
-                <MenuItem x:Name="MenuSave" Header="_Save Combined CSV" Click="OnSaveCombined" />
+                <MenuItem x:Name="MenuSaveCombined" Header="_Save Combined CSV" Click="OnSaveCombined" />
                 <Separator />
                 <MenuItem Header="E_xit" Click="OnExit" />
             </MenuItem>
@@ -126,7 +133,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Query editor -->
-                <GroupBox Header="SQL Query" Grid.Row="0" Margin="0,0,10,0">
+                <GroupBox x:Name="QueryGroupBox" Header="SQL Query" Grid.Row="0" Margin="0,0,10,0">
                     <avalonedit:TextEditor x:Name="QueryEditor" ShowLineNumbers="True" FontFamily="Consolas" FontSize="14" SyntaxHighlighting="SQL"/>
                 </GroupBox>
 

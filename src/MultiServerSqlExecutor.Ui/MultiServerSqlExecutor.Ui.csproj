@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="SQL.xshd" />
@@ -23,4 +29,10 @@
   <ItemGroup>
     <Resource Include="Assets\app-icon.png" />
   </ItemGroup>
+  <Target Name="RemovePublishedPdbs" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedPdbFiles Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(PublishedPdbFiles)" />
+  </Target>
 </Project>

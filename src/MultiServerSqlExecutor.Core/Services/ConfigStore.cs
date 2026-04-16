@@ -87,6 +87,26 @@ public class ConfigStore
         }
     }
 
+    public string? LoadLastSqlFileFolder()
+    {
+        lock (_lock)
+        {
+            return LoadDocumentNoLock().LastSqlFileFolder;
+        }
+    }
+
+    public void SaveLastSqlFileFolder(string? folderPath)
+    {
+        lock (_lock)
+        {
+            var doc = LoadDocumentNoLock();
+            doc.LastSqlFileFolder = string.IsNullOrWhiteSpace(folderPath)
+                ? null
+                : folderPath.Trim();
+            SaveDocumentNoLock(doc);
+        }
+    }
+
     public void AddGroup(string groupName)
     {
         if (string.IsNullOrWhiteSpace(groupName))
@@ -207,6 +227,9 @@ public class ConfigStore
     {
         doc.Servers ??= new List<ServerConnection>();
         doc.Groups ??= new List<string>();
+        doc.LastSqlFileFolder = string.IsNullOrWhiteSpace(doc.LastSqlFileFolder)
+            ? null
+            : doc.LastSqlFileFolder.Trim();
 
         foreach (var server in doc.Servers)
         {
@@ -266,5 +289,8 @@ public class ConfigStore
 
         [JsonProperty("groups")]
         public List<string> Groups { get; set; } = new();
+
+        [JsonProperty("lastSqlFileFolder", NullValueHandling = NullValueHandling.Ignore)]
+        public string? LastSqlFileFolder { get; set; }
     }
 }
