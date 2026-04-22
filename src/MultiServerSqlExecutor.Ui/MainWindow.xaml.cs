@@ -56,6 +56,13 @@ public partial class MainWindow : Window
         new InputGestureCollection { new KeyGesture(Key.F5) }
     );
 
+    public static readonly RoutedUICommand CopyWithHeadersCommand = new RoutedUICommand(
+        "Copy With Headers",
+        "CopyWithHeaders",
+        typeof(MainWindow),
+        new InputGestureCollection { new KeyGesture(Key.C, ModifierKeys.Control | ModifierKeys.Shift) }
+    );
+
     private readonly ConfigStore _store = new();
     private readonly SqlExecutor _executor = new();
     private readonly CsvExporter _exporter = new();
@@ -506,6 +513,95 @@ public partial class MainWindow : Window
     private void OnRunTimerTick(object? sender, EventArgs e)
     {
         UpdateElapsed();
+    }
+
+    private void OnResultsGridCellPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGridCell cell)
+        {
+            return;
+        }
+
+        SelectResultsGridCell(cell, preserveExistingSelection: cell.IsSelected && ResultsGrid.SelectedCells.Count > 1);
+    }
+
+    private void OnResultsGridCopyCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = ResultsGrid.SelectedCells.Count > 0;
+        e.Handled = true;
+    }
+
+    private void OnResultsGridContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
+        if (cell == null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        SelectResultsGridCell(cell, preserveExistingSelection: cell.IsSelected && ResultsGrid.SelectedCells.Count > 1);
+    }
+
+    private void OnCopyWithHeaders(object sender, ExecutedRoutedEventArgs e)
+    {
+        ExecuteResultsGridCopy(DataGridClipboardCopyMode.IncludeHeader);
+    }
+
+    private void OnResultsGridSelectAllCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = ResultsGrid.Items.Count > 0;
+        e.Handled = true;
+    }
+
+    private void OnResultsGridSelectAll(object sender, ExecutedRoutedEventArgs e)
+    {
+        ResultsGrid.SelectAllCells();
+        ResultsGrid.Focus();
+        e.Handled = true;
+    }
+
+    private void SelectResultsGridCell(DataGridCell cell, bool preserveExistingSelection)
+    {
+        if (!preserveExistingSelection)
+        {
+            ResultsGrid.SelectedCells.Clear();
+            cell.IsSelected = true;
+        }
+
+        ResultsGrid.CurrentCell = new DataGridCellInfo(cell.DataContext, cell.Column);
+        ResultsGrid.Focus();
+        cell.Focus();
+    }
+
+    private void ExecuteResultsGridCopy(DataGridClipboardCopyMode copyMode)
+    {
+        var originalCopyMode = ResultsGrid.ClipboardCopyMode;
+        try
+        {
+            ResultsGrid.ClipboardCopyMode = copyMode;
+            ApplicationCommands.Copy.Execute(null, ResultsGrid);
+        }
+        finally
+        {
+            ResultsGrid.ClipboardCopyMode = originalCopyMode;
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child)
+        where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent)
+            {
+                return parent;
+            }
+
+            child = VisualTreeHelper.GetParent(child);
+        }
+
+        return null;
     }
 
     private void UpdateElapsed()

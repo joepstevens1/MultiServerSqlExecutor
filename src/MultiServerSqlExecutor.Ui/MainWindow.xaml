@@ -49,6 +49,9 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ResultsGridCellStyle" TargetType="DataGridCell">
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="OnResultsGridCellPreviewMouseRightButtonDown" />
+        </Style>
     </Window.Resources>
     <Window.CommandBindings>
         <CommandBinding Command="{x:Static local:MainWindow.OpenSqlFileCommand}" Executed="OnOpenSqlFile" />
@@ -142,7 +145,43 @@
 
                 <!-- Results -->
                 <GroupBox Header="Results" Grid.Row="2" Margin="0,0,10,0">
-                    <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="True" IsReadOnly="True" />
+                    <DataGrid x:Name="ResultsGrid"
+                              AutoGenerateColumns="True"
+                              IsReadOnly="True"
+                              CellStyle="{StaticResource ResultsGridCellStyle}"
+                              ContextMenuOpening="OnResultsGridContextMenuOpening"
+                              SelectionUnit="CellOrRowHeader"
+                              SelectionMode="Extended"
+                              ClipboardCopyMode="ExcludeHeader">
+                        <DataGrid.CommandBindings>
+                            <CommandBinding Command="{x:Static local:MainWindow.CopyWithHeadersCommand}"
+                                            CanExecute="OnResultsGridCopyCanExecute"
+                                            Executed="OnCopyWithHeaders" />
+                            <CommandBinding Command="{x:Static ApplicationCommands.SelectAll}"
+                                            CanExecute="OnResultsGridSelectAllCanExecute"
+                                            Executed="OnResultsGridSelectAll" />
+                        </DataGrid.CommandBindings>
+                        <DataGrid.InputBindings>
+                            <KeyBinding Command="{x:Static local:MainWindow.CopyWithHeadersCommand}"
+                                        Key="C"
+                                        Modifiers="Ctrl+Shift" />
+                            <KeyBinding Command="{x:Static ApplicationCommands.SelectAll}"
+                                        Key="A"
+                                        Modifiers="Control" />
+                        </DataGrid.InputBindings>
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="_Copy"
+                                          Command="{x:Static ApplicationCommands.Copy}"
+                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          InputGestureText="Ctrl+C" />
+                                <MenuItem Header="Copy With _Headers"
+                                          Command="{x:Static local:MainWindow.CopyWithHeadersCommand}"
+                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          InputGestureText="Ctrl+Shift+C" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                    </DataGrid>
                 </GroupBox>
             </Grid>
 
