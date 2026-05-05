@@ -419,3 +419,6 @@ FodyWeavers.xsd
 
 # Local dotnet CLI home used in this repo for sandboxed builds
 .dotnet-home/
+
+.dotnet/
+.idea/
