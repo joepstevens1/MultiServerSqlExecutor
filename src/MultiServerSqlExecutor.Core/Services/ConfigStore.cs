@@ -233,6 +233,11 @@ public class ConfigStore
 
         foreach (var server in doc.Servers)
         {
+            server.Name = (server.Name ?? string.Empty).Trim();
+            server.Server = (server.Server ?? string.Empty).Trim();
+            server.Database = (server.Database ?? string.Empty).Trim();
+            server.Username = (server.Username ?? string.Empty).Trim();
+            server.TenantId = (server.TenantId ?? string.Empty).Trim();
             server.Groups ??= new List<string>();
             server.Groups = DistinctNonEmpty(server.Groups);
         }

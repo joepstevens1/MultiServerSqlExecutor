@@ -478,6 +478,26 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnDatabaseStatusIndicatorClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: DatabaseExecutionItem item } || !item.HasError)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(item.ErrorMessage!);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Clipboard Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        e.Handled = true;
+    }
+
     private void StartRunStats(int totalServers)
     {
         _runStartUtc = DateTime.UtcNow;
@@ -847,9 +867,13 @@ internal sealed class DatabaseExecutionItem : INotifyPropertyChanged
         QueryExecutionStatus.Completed => "Completed",
         QueryExecutionStatus.Errored => string.IsNullOrWhiteSpace(_errorMessage)
             ? "Errored"
-            : $"Errored: {_errorMessage}",
+            : $"Errored: {_errorMessage}\n\nClick to copy.",
         _ => "Unknown"
     };
+
+    public Cursor StatusCursor => HasError ? Cursors.Hand : Cursors.Arrow;
+    public bool HasError => _status == QueryExecutionStatus.Errored && !string.IsNullOrWhiteSpace(_errorMessage);
+    public string? ErrorMessage => _errorMessage;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -860,6 +884,9 @@ internal sealed class DatabaseExecutionItem : INotifyPropertyChanged
         OnPropertyChanged(nameof(StatusGlyph));
         OnPropertyChanged(nameof(StatusBrush));
         OnPropertyChanged(nameof(StatusTooltip));
+        OnPropertyChanged(nameof(StatusCursor));
+        OnPropertyChanged(nameof(HasError));
+        OnPropertyChanged(nameof(ErrorMessage));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

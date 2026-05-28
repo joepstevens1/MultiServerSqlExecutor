@@ -1,6 +1,7 @@
 using System.Data;
 using System.Threading;
 using System.Collections.Concurrent;
+using System.Text;
 using Microsoft.Data.SqlClient;
 using MultiServerSqlExecutor.Core.Models;
 
@@ -8,8 +9,11 @@ namespace MultiServerSqlExecutor.Core.Services;
 
 public class SqlExecutor
 {
-    private readonly ConcurrentDictionary<string, byte> _authenticatedServerKeys =
+    private readonly ConcurrentDictionary<string, byte> _authenticatedInteractiveContextKeys =
         new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly AzureSqlAccessTokenBroker _azureSqlAccessTokenBroker = new();
+    private readonly ConfigStore _configStore = new();
 
     public async Task<Dictionary<string, DataTable>> ExecuteOnAllAsync(
         IReadOnlyList<ServerConnection> servers,
@@ -58,15 +62,22 @@ public class SqlExecutor
         var connectedServers = new List<ServerConnection>();
 
         // Force interactive auth serially so login prompts are not shown in parallel.
+        // Non-interactive connections can skip this warm-up and go straight to the query wave.
         foreach (var server in servers)
         {
+            if (!RequiresSerializedInteractiveAuthentication(server))
+            {
+                connectedServers.Add(server);
+                continue;
+            }
+
             try
             {
-                var serverKey = BuildServerKey(server);
-                if (!_authenticatedServerKeys.ContainsKey(serverKey))
+                var interactiveContextKey = BuildInteractiveAuthenticationKey(server);
+                if (!_authenticatedInteractiveContextKeys.ContainsKey(interactiveContextKey))
                 {
                     _ = await ExecuteAsync(server, "Select 1", ct);
-                    _authenticatedServerKeys.TryAdd(serverKey, 0);
+                    _authenticatedInteractiveContextKeys.TryAdd(interactiveContextKey, 0);
                 }
 
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
@@ -99,7 +110,6 @@ public class SqlExecutor
 
         var tasks = connectedServers.Select(async server =>
         {
-            var serverKey = BuildServerKey(server);
             try
             {
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
@@ -123,8 +133,6 @@ public class SqlExecutor
             }
             catch (Exception ex)
             {
-                _authenticatedServerKeys.TryRemove(serverKey, out _);
-
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
                 {
                     Server = server,
@@ -151,26 +159,121 @@ public class SqlExecutor
         return results;
     }
 
-    private static string BuildServerKey(ServerConnection server)
+    private static bool RequiresSerializedInteractiveAuthentication(ServerConnection server)
     {
-        return string.Join(
-            "|",
-            server.Authentication.ToString(),
-            server.Server ?? string.Empty,
-            server.Database ?? string.Empty,
-            server.Username ?? string.Empty);
+        return server.Authentication is AuthType.AzureInteractive or AuthType.AzureMfa;
+    }
+
+    private static string BuildInteractiveAuthenticationKey(ServerConnection server)
+    {
+        return AzureSqlAccessTokenBroker.BuildInteractiveLoginContextKey(server);
     }
 
     public async Task<DataTable> ExecuteAsync(ServerConnection server, string sql, CancellationToken ct = default)
     {
-        using var conn = new SqlConnection(server.BuildConnectionString());
-        await conn.OpenAsync(ct);
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.CommandTimeout = 0; // no timeout by default
-        using var reader = await cmd.ExecuteReaderAsync(ct);
-        var dt = new DataTable();
-        dt.Load(reader);
-        return dt;
+        var attemptedInteractiveRefresh = false;
+
+        while (true)
+        {
+            try
+            {
+                using var connectionScope = _azureSqlAccessTokenBroker.BeginConnectionScope(server);
+                using var conn = CreateConnection(server);
+                await conn.OpenAsync(ct);
+                PersistDiscoveredTenantId(server);
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.CommandTimeout = 0; // no timeout by default
+                using var reader = await cmd.ExecuteReaderAsync(ct);
+                var dt = new DataTable();
+                dt.Load(reader);
+                return dt;
+            }
+            catch (Exception ex) when (!attemptedInteractiveRefresh && IsRetryableInteractiveAuthenticationFailure(server, ex))
+            {
+                attemptedInteractiveRefresh = true;
+                ResetInteractiveAuthentication(server);
+            }
+        }
+    }
+
+    private SqlConnection CreateConnection(ServerConnection server)
+    {
+        if (!AzureSqlAccessTokenBroker.Supports(server))
+        {
+            return new SqlConnection(server.BuildConnectionString());
+        }
+
+        return new SqlConnection(server.BuildConnectionStringForAccessTokenCallback())
+        {
+            AccessTokenCallback = _azureSqlAccessTokenBroker.AccessTokenCallback
+        };
+    }
+
+    private void ResetInteractiveAuthentication(ServerConnection server)
+    {
+        var interactiveContextKey = BuildInteractiveAuthenticationKey(server);
+        _authenticatedInteractiveContextKeys.TryRemove(interactiveContextKey, out _);
+        _azureSqlAccessTokenBroker.Invalidate(server.Username);
+    }
+
+    private static bool IsRetryableInteractiveAuthenticationFailure(ServerConnection server, Exception ex)
+    {
+        if (!RequiresSerializedInteractiveAuthentication(server))
+        {
+            return false;
+        }
+
+        var message = FlattenExceptionMessages(ex);
+        return message.Contains("token", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("login failed", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("aadsts", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("expired", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FlattenExceptionMessages(Exception ex)
+    {
+        var builder = new StringBuilder();
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.Append(current.Message);
+        }
+
+        return builder.ToString();
+    }
+
+    private void PersistDiscoveredTenantId(ServerConnection server)
+    {
+        if (!RequiresSerializedInteractiveAuthentication(server) || !string.IsNullOrWhiteSpace(server.TenantId))
+        {
+            return;
+        }
+
+        var discoveredTenantId = _azureSqlAccessTokenBroker.GetDiscoveredTenantId();
+        if (string.IsNullOrWhiteSpace(discoveredTenantId))
+        {
+            return;
+        }
+
+        server.TenantId = discoveredTenantId;
+
+        var configuredServers = _configStore.Load().ToList();
+        var configuredServer = configuredServers.FirstOrDefault(s =>
+            string.Equals(s.Name, server.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (configuredServer == null || !string.IsNullOrWhiteSpace(configuredServer.TenantId))
+        {
+            return;
+        }
+
+        configuredServer.TenantId = discoveredTenantId;
+        _configStore.Save(configuredServers);
     }
 }

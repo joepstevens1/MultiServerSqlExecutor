@@ -40,6 +40,7 @@ public partial class ServersWindow : Window
                 Database = TxtDatabase.Text.Trim(),
                 Username = TxtUser.Text.Trim(),
                 Password = TxtPass.Password,
+                TenantId = TxtTenantId.Text.Trim(),
                 Authentication = authType
             };
 
@@ -94,6 +95,7 @@ public partial class ServersWindow : Window
         TxtDatabase.Clear();
         TxtUser.Clear();
         TxtPass.Clear();
+        TxtTenantId.Clear();
         CboAuthType.SelectedIndex = 0;
         TxtName.IsEnabled = true;
     }
@@ -107,6 +109,7 @@ public partial class ServersWindow : Window
             TxtDatabase.Text = sc.Database;
             TxtUser.Text = sc.Username;
             TxtPass.Password = sc.Password;
+            TxtTenantId.Text = sc.TenantId;
 
             foreach (ComboBoxItem item in CboAuthType.Items)
             {
@@ -121,7 +124,7 @@ public partial class ServersWindow : Window
 
     private void OnAuthTypeChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (CboAuthType == null || LblUser == null || TxtUser == null || LblPass == null || TxtPass == null) return;
+        if (CboAuthType == null || LblUser == null || TxtUser == null || LblPass == null || TxtPass == null || LblTenantId == null || TxtTenantId == null) return;
         if (CboAuthType.SelectedItem is ComboBoxItem item && Enum.TryParse<AuthType>(item.Tag.ToString(), out var authType))
         {
             switch (authType)
@@ -132,6 +135,8 @@ public partial class ServersWindow : Window
                     TxtUser.Visibility = Visibility.Visible;
                     LblPass.Visibility = Visibility.Visible;
                     TxtPass.Visibility = Visibility.Visible;
+                    LblTenantId.Visibility = Visibility.Collapsed;
+                    TxtTenantId.Visibility = Visibility.Collapsed;
                     break;
                 case AuthType.AzureMfa:
                 case AuthType.AzureInteractive:
@@ -139,6 +144,8 @@ public partial class ServersWindow : Window
                     TxtUser.Visibility = Visibility.Visible;
                     LblPass.Visibility = Visibility.Collapsed;
                     TxtPass.Visibility = Visibility.Collapsed;
+                    LblTenantId.Visibility = Visibility.Visible;
+                    TxtTenantId.Visibility = Visibility.Visible;
                     break;
             }
         }

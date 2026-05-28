@@ -75,7 +75,8 @@ internal class Program
                 Server = server,
                 Database = database,
                 Username = username,
-                Password = password
+                Password = password,
+                TenantId = dict.TryGetValue("tenantid", out var tenantId) ? tenantId : string.Empty
             });
             Console.WriteLine($"Added server '{name}'.");
             return 0;
@@ -112,7 +113,8 @@ internal class Program
         foreach (var s in list)
         {
             var groups = s.Groups?.Count > 0 ? string.Join(",", s.Groups) : "(none)";
-            Console.WriteLine($"- {s.Authentication} {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}; Groups={groups}");
+            var tenant = string.IsNullOrWhiteSpace(s.TenantId) ? "(auto)" : s.TenantId;
+            Console.WriteLine($"- {s.Authentication} {s.Name}: {s.Server}; DB={s.Database}; User={s.Username}; Tenant={tenant}; Groups={groups}");
         }
         return 0;
     }
@@ -188,7 +190,7 @@ internal class Program
         Console.WriteLine("Multi-Server SQL Executor CLI");
         Console.WriteLine();
         Console.WriteLine("Commands:");
-        Console.WriteLine("  add-server --name <name> --server <server> --database <db> --username <user> --password <pass>");
+        Console.WriteLine("  add-server --name <name> --server <server> --database <db> --username <user> --password <pass> [--tenantId <tenant-guid>]");
         Console.WriteLine("  remove-server --name <name>");
         Console.WriteLine("  list-servers");
         Console.WriteLine("  execute-query --queryFile <path> --outputFile <path> [--perServerDir <dir>]");

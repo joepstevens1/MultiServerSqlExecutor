@@ -230,15 +230,17 @@
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding DisplayName}" />
 
-                                    <Border Grid.Column="1"
-                                            Width="18"
-                                            Height="18"
-                                            CornerRadius="9"
-                                            Background="{Binding StatusBrush}"
-                                            ToolTip="{Binding StatusTooltip}">
-                                        <TextBlock Text="{Binding StatusGlyph}"
-                                                   HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"
+                                     <Border Grid.Column="1"
+                                             Width="18"
+                                             Height="18"
+                                             CornerRadius="9"
+                                             Background="{Binding StatusBrush}"
+                                             Cursor="{Binding StatusCursor}"
+                                             MouseLeftButtonUp="OnDatabaseStatusIndicatorClick"
+                                             ToolTip="{Binding StatusTooltip}">
+                                         <TextBlock Text="{Binding StatusGlyph}"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
                                                    FontSize="10"
                                                    Foreground="White"
                                                    FontWeight="Bold" />

@@ -17,26 +17,13 @@ public class ServerConnection
     public string Database { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty; // Consider using secure storage in production
+    public string TenantId { get; set; } = string.Empty;
     public AuthType Authentication { get; set; } = AuthType.SqlPassword;
     public List<string> Groups { get; set; } = new();
 
     public string BuildConnectionString()
     {
-        var dataSource = Server;
-        if (Authentication != AuthType.SqlPassword && !string.IsNullOrWhiteSpace(dataSource) && !dataSource.Contains('.'))
-        {
-            dataSource += ".database.windows.net";
-        }
-
-        var builder = new SqlConnectionStringBuilder
-        {
-            DataSource = dataSource,
-            InitialCatalog = Database,
-            PersistSecurityInfo = false,
-            MultipleActiveResultSets = false,
-            Encrypt = true,
-            TrustServerCertificate = true
-        };
+        var builder = CreateBaseConnectionStringBuilder();
 
         switch (Authentication)
         {
@@ -60,5 +47,36 @@ public class ServerConnection
         }
 
         return builder.ConnectionString;
+    }
+
+    public string BuildConnectionStringForAccessTokenCallback()
+    {
+        var builder = CreateBaseConnectionStringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(Username))
+        {
+            builder.UserID = Username;
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private SqlConnectionStringBuilder CreateBaseConnectionStringBuilder()
+    {
+        var dataSource = Server;
+        if (Authentication != AuthType.SqlPassword && !string.IsNullOrWhiteSpace(dataSource) && !dataSource.Contains('.'))
+        {
+            dataSource += ".database.windows.net";
+        }
+
+        return new SqlConnectionStringBuilder
+        {
+            DataSource = dataSource,
+            InitialCatalog = Database,
+            PersistSecurityInfo = false,
+            MultipleActiveResultSets = false,
+            Encrypt = true,
+            TrustServerCertificate = true
+        };
     }
 }
