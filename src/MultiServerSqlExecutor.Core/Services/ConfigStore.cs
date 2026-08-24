@@ -1,6 +1,7 @@
 using MultiServerSqlExecutor.Core.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Collections.ObjectModel;
 
 namespace MultiServerSqlExecutor.Core.Services;
 
@@ -84,6 +85,25 @@ public class ConfigStore
         lock (_lock)
         {
             return LoadDocumentNoLock().Groups;
+        }
+    }
+
+    public ImportMappingProfile LoadImportProfile()
+    {
+        lock (_lock)
+        {
+            return CloneImportProfile(LoadDocumentNoLock().ImportSettings.Profile);
+        }
+    }
+
+    public void SaveImportProfile(ImportMappingProfile profile)
+    {
+        lock (_lock)
+        {
+            var doc = LoadDocumentNoLock();
+            doc.ImportSettings ??= new ImportSettingsDocument();
+            doc.ImportSettings.Profile = CloneImportProfile(profile);
+            SaveDocumentNoLock(doc);
         }
     }
 
@@ -227,6 +247,8 @@ public class ConfigStore
     {
         doc.Servers ??= new List<ServerConnection>();
         doc.Groups ??= new List<string>();
+        doc.ImportSettings ??= new ImportSettingsDocument();
+        doc.ImportSettings.Profile ??= ImportMappingProfile.CreateEmpty();
         doc.LastSqlFileFolder = string.IsNullOrWhiteSpace(doc.LastSqlFileFolder)
             ? null
             : doc.LastSqlFileFolder.Trim();
@@ -243,6 +265,7 @@ public class ConfigStore
         }
 
         doc.Groups = MergeGroups(doc.Groups, CollectGroupsFromServers(doc.Servers));
+        doc.ImportSettings.Profile = CloneImportProfile(doc.ImportSettings.Profile);
     }
 
     private static List<string> CollectGroupsFromServers(IEnumerable<ServerConnection> servers)
@@ -297,5 +320,73 @@ public class ConfigStore
 
         [JsonProperty("lastSqlFileFolder", NullValueHandling = NullValueHandling.Ignore)]
         public string? LastSqlFileFolder { get; set; }
+
+        [JsonProperty("importSettings")]
+        public ImportSettingsDocument ImportSettings { get; set; } = new();
+    }
+
+    private sealed class ImportSettingsDocument
+    {
+        [JsonProperty("profile")]
+        public ImportMappingProfile Profile { get; set; } = new();
+    }
+
+    private static ImportMappingProfile CloneImportProfile(ImportMappingProfile profile)
+    {
+        var fieldMappings = ImportMappingProfile.CreateEmpty().FieldMappings;
+        foreach (var mapping in profile.FieldMappings?
+                     .Select(mapping => new ImportFieldMapping
+                     {
+                         TargetField = mapping.TargetField,
+                         SourceMode = mapping.SourceMode,
+                         SourceColumn = (mapping.SourceColumn ?? string.Empty).Trim(),
+                         FixedValue = (mapping.FixedValue ?? string.Empty).Trim(),
+                         ValueMappings = CloneValueMappings(mapping.ValueMappings)
+                     })
+                     .GroupBy(mapping => mapping.TargetField)
+                     .Select(group => group.First())
+                     .ToList() ?? new List<ImportFieldMapping>())
+        {
+            var index = fieldMappings.FindIndex(existing => existing.TargetField == mapping.TargetField);
+            if (index >= 0)
+            {
+                fieldMappings[index] = mapping;
+            }
+            else
+            {
+                fieldMappings.Add(mapping);
+            }
+        }
+
+        return new ImportMappingProfile
+        {
+            FieldMappings = fieldMappings,
+            GroupMappings = profile.GroupMappings?
+                .Select(mapping => new ImportGroupMapping
+                {
+                    SourceMode = mapping.SourceMode,
+                    SourceColumn = (mapping.SourceColumn ?? string.Empty).Trim(),
+                    FixedValue = (mapping.FixedValue ?? string.Empty).Trim(),
+                    ValueMappings = CloneValueMappings(mapping.ValueMappings)
+                })
+                .Where(mapping => mapping.SourceMode != ImportValueSourceMode.None ||
+                                  !string.IsNullOrWhiteSpace(mapping.SourceColumn) ||
+                                  !string.IsNullOrWhiteSpace(mapping.FixedValue) ||
+                                  mapping.ValueMappings.Count > 0)
+                .ToList() ?? new List<ImportGroupMapping>()
+        };
+    }
+
+    private static List<ImportValueMap> CloneValueMappings(IEnumerable<ImportValueMap>? valueMappings)
+    {
+        return valueMappings?
+            .Where(mapping => !string.IsNullOrWhiteSpace(mapping.SourceValue) || !string.IsNullOrWhiteSpace(mapping.TargetValue))
+            .GroupBy(mapping => (mapping.SourceValue ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ImportValueMap
+            {
+                SourceValue = group.First().SourceValue.Trim(),
+                TargetValue = (group.First().TargetValue ?? string.Empty).Trim()
+            })
+            .ToList() ?? new List<ImportValueMap>();
     }
 }

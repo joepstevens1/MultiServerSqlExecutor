@@ -164,6 +164,20 @@ public partial class ServersWindow : Window
         }
     }
 
+    private void OnImportCsv(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ImportDatabasesWindow
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            ClearFields();
+            LoadServers();
+        }
+    }
+
     private void OnClose(object sender, RoutedEventArgs e)
     {
         Close();
