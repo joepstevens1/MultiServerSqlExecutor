@@ -19,14 +19,16 @@ public class SqlExecutor
         IReadOnlyList<ServerConnection> servers,
         string sql,
         CancellationToken ct = default,
-        Action<int, int, int>? progressCallback = null)
+        Action<int, int, int>? progressCallback = null,
+        bool readOnly = false)
     {
         var executionResults = await ExecuteOnAllWithStatusAsync(
             servers,
             sql,
             ct,
             statusCallback: null,
-            progressCallback: progressCallback);
+            progressCallback: progressCallback,
+            readOnly: readOnly);
 
         var failures = executionResults.Where(r => !r.Succeeded).ToList();
         if (failures.Count > 0)
@@ -45,7 +47,8 @@ public class SqlExecutor
         string sql,
         CancellationToken ct = default,
         Action<ServerExecutionStatusUpdate>? statusCallback = null,
-        Action<int, int, int>? progressCallback = null)
+        Action<int, int, int>? progressCallback = null,
+        bool readOnly = false)
     {
         progressCallback?.Invoke(servers.Count, servers.Count, 0);
         foreach (var server in servers)
@@ -76,7 +79,7 @@ public class SqlExecutor
                 var interactiveContextKey = BuildInteractiveAuthenticationKey(server);
                 if (!_authenticatedInteractiveContextKeys.ContainsKey(interactiveContextKey))
                 {
-                    _ = await ExecuteAsync(server, "Select 1", ct);
+                    _ = await ExecuteAsync(server, "Select 1", ct, readOnly);
                     _authenticatedInteractiveContextKeys.TryAdd(interactiveContextKey, 0);
                 }
 
@@ -118,7 +121,7 @@ public class SqlExecutor
                     Status = QueryExecutionStatus.Running
                 });
 
-                var data = await ExecuteAsync(server, sql, ct);
+                var data = await ExecuteAsync(server, sql, ct, readOnly);
                 statusCallback?.Invoke(new ServerExecutionStatusUpdate
                 {
                     Server = server,
@@ -169,7 +172,7 @@ public class SqlExecutor
         return AzureSqlAccessTokenBroker.BuildInteractiveLoginContextKey(server);
     }
 
-    public async Task<DataTable> ExecuteAsync(ServerConnection server, string sql, CancellationToken ct = default)
+    public async Task<DataTable> ExecuteAsync(ServerConnection server, string sql, CancellationToken ct = default, bool readOnly = false)
     {
         var attemptedInteractiveRefresh = false;
 
@@ -178,7 +181,7 @@ public class SqlExecutor
             try
             {
                 using var connectionScope = _azureSqlAccessTokenBroker.BeginConnectionScope(server);
-                using var conn = CreateConnection(server);
+                using var conn = CreateConnection(server, readOnly);
                 await conn.OpenAsync(ct);
                 PersistDiscoveredTenantId(server);
                 using var cmd = conn.CreateCommand();
@@ -197,14 +200,14 @@ public class SqlExecutor
         }
     }
 
-    private SqlConnection CreateConnection(ServerConnection server)
+    private SqlConnection CreateConnection(ServerConnection server, bool readOnly = false)
     {
         if (!AzureSqlAccessTokenBroker.Supports(server))
         {
-            return new SqlConnection(server.BuildConnectionString());
+            return new SqlConnection(server.BuildConnectionString(readOnly));
         }
 
-        return new SqlConnection(server.BuildConnectionStringForAccessTokenCallback())
+        return new SqlConnection(server.BuildConnectionStringForAccessTokenCallback(readOnly))
         {
             AccessTokenCallback = _azureSqlAccessTokenBroker.AccessTokenCallback
         };

@@ -21,9 +21,9 @@ public class ServerConnection
     public AuthType Authentication { get; set; } = AuthType.SqlPassword;
     public List<string> Groups { get; set; } = new();
 
-    public string BuildConnectionString()
+    public string BuildConnectionString(bool readOnly = false)
     {
-        var builder = CreateBaseConnectionStringBuilder();
+        var builder = CreateBaseConnectionStringBuilder(readOnly);
 
         switch (Authentication)
         {
@@ -49,9 +49,9 @@ public class ServerConnection
         return builder.ConnectionString;
     }
 
-    public string BuildConnectionStringForAccessTokenCallback()
+    public string BuildConnectionStringForAccessTokenCallback(bool readOnly = false)
     {
-        var builder = CreateBaseConnectionStringBuilder();
+        var builder = CreateBaseConnectionStringBuilder(readOnly);
 
         if (!string.IsNullOrWhiteSpace(Username))
         {
@@ -61,7 +61,7 @@ public class ServerConnection
         return builder.ConnectionString;
     }
 
-    private SqlConnectionStringBuilder CreateBaseConnectionStringBuilder()
+    private SqlConnectionStringBuilder CreateBaseConnectionStringBuilder(bool readOnly = false)
     {
         var dataSource = Server;
         if (Authentication != AuthType.SqlPassword && !string.IsNullOrWhiteSpace(dataSource) && !dataSource.Contains('.'))
@@ -69,7 +69,7 @@ public class ServerConnection
             dataSource += ".database.windows.net";
         }
 
-        return new SqlConnectionStringBuilder
+        var builder = new SqlConnectionStringBuilder
         {
             DataSource = dataSource,
             InitialCatalog = Database,
@@ -78,5 +78,14 @@ public class ServerConnection
             Encrypt = true,
             TrustServerCertificate = true
         };
+
+        if (readOnly)
+        {
+            // Request the read-only replica of a failover group / readable secondary
+            // and signal intent so the server rejects any accidental write.
+            builder.ApplicationIntent = ApplicationIntent.ReadOnly;
+        }
+
+        return builder;
     }
 }

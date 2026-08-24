@@ -125,7 +125,7 @@ internal class Program
         if (!dict.TryGetValue("queryfile", out var queryFile) ||
             !dict.TryGetValue("outputfile", out var outputFile))
         {
-            Console.Error.WriteLine("Usage: execute-query --queryFile <path> --outputFile <path> [--perServerDir <dir>]");
+            Console.Error.WriteLine("Usage: execute-query --queryFile <path> --outputFile <path> [--perServerDir <dir>] [--group <name>] [--readOnly]");
             return 2;
         }
         if (!File.Exists(queryFile))
@@ -141,26 +141,70 @@ internal class Program
             return 5;
         }
 
+        // Optional group filter. The UI can filter by group; the CLI now can too.
+        if (dict.TryGetValue("group", out var group) && !string.IsNullOrWhiteSpace(group))
+        {
+            servers = servers
+                .Where(s => s.Groups != null &&
+                            s.Groups.Any(g => string.Equals(g, group, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (servers.Count == 0)
+            {
+                Console.Error.WriteLine($"No servers belong to group '{group}'.");
+                return 5;
+            }
+            Console.WriteLine($"Filtered to group '{group}': {servers.Count} server(s).");
+        }
+
+        var readOnly = dict.ContainsKey("readonly");
+        if (readOnly)
+        {
+            Console.WriteLine("Read-only intent enabled (ApplicationIntent=ReadOnly).");
+        }
+
         var exec = new SqlExecutor();
         var exporter = new CsvExporter();
         Console.WriteLine($"Executing query on {servers.Count} server(s)...");
-        try
+
+        // Resilient execution: a single failing database must not discard the
+        // results from every other database in an unattended run.
+        var executionResults = await exec.ExecuteOnAllWithStatusAsync(
+            servers,
+            sql,
+            readOnly: readOnly);
+
+        var succeeded = executionResults
+            .Where(r => r.Succeeded)
+            .ToDictionary(r => r.Server.Name, r => r.Data!);
+        var failures = executionResults.Where(r => !r.Succeeded).ToList();
+
+        if (succeeded.Count > 0)
         {
-            var results = await exec.ExecuteOnAllAsync(servers, sql);
             if (dict.TryGetValue("perserverdir", out var perServerDir))
             {
-                exporter.ExportPerServer(results, perServerDir);
+                exporter.ExportPerServer(succeeded, perServerDir);
                 Console.WriteLine($"Per-server results saved to: {perServerDir}");
             }
-            exporter.ExportCombined(results, outputFile);
-            Console.WriteLine($"Combined results saved to: {outputFile}");
-            return 0;
+            exporter.ExportCombined(succeeded, outputFile);
+            Console.WriteLine($"Combined results saved to: {outputFile} ({succeeded.Count} of {servers.Count} server(s)).");
         }
-        catch (Exception ex)
+        else
         {
-            Console.Error.WriteLine("Error executing query: " + ex.Message);
-            return 6;
+            Console.Error.WriteLine("No servers returned results.");
         }
+
+        if (failures.Count > 0)
+        {
+            Console.Error.WriteLine($"{failures.Count} server(s) failed:");
+            foreach (var failure in failures)
+            {
+                Console.Error.WriteLine($"  - {failure.Server.Name}: {failure.Error?.Message}");
+            }
+        }
+
+        // Succeed as long as at least one database returned data, so the daily
+        // report still runs when a few databases are unreachable.
+        return succeeded.Count > 0 ? 0 : 6;
     }
 
     private static Dictionary<string, string> ParseArgs(string[] args)
@@ -193,6 +237,6 @@ internal class Program
         Console.WriteLine("  add-server --name <name> --server <server> --database <db> --username <user> --password <pass> [--tenantId <tenant-guid>]");
         Console.WriteLine("  remove-server --name <name>");
         Console.WriteLine("  list-servers");
-        Console.WriteLine("  execute-query --queryFile <path> --outputFile <path> [--perServerDir <dir>]");
+        Console.WriteLine("  execute-query --queryFile <path> --outputFile <path> [--perServerDir <dir>] [--group <name>] [--readOnly]");
     }
 }

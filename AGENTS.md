@@ -102,6 +102,23 @@ Run UI (Windows):
 dotnet run --project src/MultiServerSqlExecutor.Ui
 ```
 
+### Publish the solution (single-file executables)
+
+Build and publish both the UI and CLI as self-contained single-file
+executables using `build-single-file.cmd` from the repository root:
+
+```powershell
+.\build-single-file.cmd
+```
+
+Optional arguments: configuration (default `Release`) and runtime ID
+(default `win-x64`), e.g. `.\build-single-file.cmd Release win-x64`.
+
+Output executables:
+
+- UI: `artifacts\publish\ui\<runtime-id>\MultiServerSqlExecutor.Ui.exe`
+- CLI: `artifacts\publish\cli\<runtime-id>\MultiServerSqlExecutor.Cli.exe`
+
 ## Known Constraints
 
 - No test project currently exists; use targeted smoke checks after edits.
